@@ -1,0 +1,100 @@
+{
+  "Name": "audVisMotSpatialFreq",
+  "BIDSModelVersion": "1.0.0",
+  "Description": "contrasts for the audio visual motion spatial frequecies mvpa modelling block average",
+  "Input": {
+    "task": [
+      "audVisMotSpatialFreq"
+    ],
+    "space": [
+      "MNI152NLin2009cAsym"
+    ]
+  },
+  "Nodes": [
+    {
+      "Level": "Run",
+      "Name": "mvpa-block-average",
+      "GroupBy": [
+        "run",
+        "subject"
+      ],
+      "Model": {
+        "Type": "glm",
+        "X": [
+          "trial_type.visual_sf_high",
+          "trial_type.visual_sf_low",
+          "trial_type.visual_full_motion",
+          "trial_type.auditory_sf_high",
+          "trial_type.auditory_sf_low",
+          "trial_type.auditory_full_motion",
+          "trans_?",
+          "rot_?"
+        ],
+        "HRF": {
+          "Variables": [
+            "trial_type.visual_sf_high",
+            "trial_type.visual_sf_low",
+            "trial_type.visual_full_motion",
+            "trial_type.auditory_sf_high",
+            "trial_type.auditory_sf_low",
+            "trial_type.auditory_full_motion"
+          ],
+          "Model": "spm+derivative"
+        },
+        "Options": {
+          "HighPassFilterCutoffHz": 0.008
+        },
+        "Software": {
+          "SPM": {
+            "InclusiveMaskingThreshold": 0.8,
+            "SerialCorrelation": "FAST"
+          }
+        }
+      },
+      "DummyContrasts": {
+        "Test": "t",
+        "Contrasts": [
+          "trial_type.visual_sf_high",
+          "trial_type.visual_sf_low",
+          "trial_type.visual_full_motion",
+          "trial_type.auditory_sf_high",
+          "trial_type.auditory_sf_low",
+          "trial_type.auditory_full_motion"
+        ]
+      }
+    },
+    {
+      "Level": "Subject",
+      "Name": "subject_level",
+      "GroupBy": [
+        "contrast",
+        "subject"
+      ],
+      "Model": {
+        "Type": "glm",
+        "X": [
+          1
+        ]
+      },
+      "DummyContrasts": {
+        "Test": "t"
+      }
+    },
+    {
+      "Level": "Dataset",
+      "Name": "dataset_level",
+      "GroupBy": [
+        "contrast"
+      ],
+      "Model": {
+        "Type": "glm",
+        "X": [
+          1
+        ]
+      },
+      "DummyContrasts": {
+        "Test": "t"
+      }
+    }
+  ]
+}

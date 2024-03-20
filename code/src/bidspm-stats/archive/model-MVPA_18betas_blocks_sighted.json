@@ -1,0 +1,111 @@
+{
+  "Name": "MVPA_18_betas",
+  "BIDSModelVersion": "1.0.0",
+  "Description": "model for MVPA of words, pseudowords and control aggregated within each BLOCK (1 beta/block)",
+  "Input": {
+    "task": [
+      "MultimodalReadSpeech"
+    ],
+    "space": [
+      "IXI549Space"
+    ]
+  },
+  "Nodes": [
+    {
+      "Level": "Run",
+      "Name": "mvpa_18betas",
+      "GroupBy": [
+        "run",
+        "subject"
+      ],
+      "Model": {
+          "X": [
+              "code.block_visual_word_1",
+              "code.block_visual_word_2",
+              "code.block_visual_word_3",
+              "code.block_visual_pseudoword_1",
+              "code.block_visual_pseudoword_2",
+              "code.block_visual_pseudoword_3",
+              "code.block_visual_control_1",
+              "code.block_visual_control_2",
+              "code.block_visual_control_3",
+              "code.block_audio_word_1",
+              "code.block_audio_word_2",
+              "code.block_audio_word_3",
+              "code.block_audio_pseudoword_1",
+              "code.block_audio_pseudoword_2",
+              "code.block_audio_pseudoword_3",
+              "code.block_audio_control_1",
+              "code.block_audio_control_2",
+              "code.block_audio_control_3",
+              "trial_type.cue",
+              "trial_type.target",
+              "trial_type.response",
+              "trans_?",
+              "rot_?",
+              "*outlier*"
+          ],
+          "HRF": {
+              "Variables": [
+                "code.block_visual_word_1",
+                "code.block_visual_word_2",
+                "code.block_visual_word_3",
+                "code.block_visual_pseudoword_1",
+                "code.block_visual_pseudoword_2",
+                "code.block_visual_pseudoword_3",
+                "code.block_visual_control_1",
+                "code.block_visual_control_2",
+                "code.block_visual_control_3",
+                "code.block_audio_word_1",
+                "code.block_audio_word_2",
+                "code.block_audio_word_3",
+                "code.block_audio_pseudoword_1",
+                "code.block_audio_pseudoword_2",
+                "code.block_audio_pseudoword_3",
+                "code.block_audio_control_1",
+                "code.block_audio_control_2",
+                "code.block_audio_control_3",
+                "trial_type.cue",
+                "trial_type.target",
+                "trial_type.response"
+              ],
+              "Model": "spm"
+          },
+          "Type": "glm",
+          "Options": {
+              "HighPassFilterCutoffHz": 0.0078,
+              "Mask": ""
+          },
+          "Software": {
+              "SPM": {
+                  "SerialCorrelation": "FAST"
+              }
+          }
+      },
+      "DummyContrasts": {
+          "Test": "t",
+          "Contrasts": [
+            "code.block_visual_word_1",
+            "code.block_visual_word_2",
+            "code.block_visual_word_3",
+            "code.block_visual_pseudoword_1",
+            "code.block_visual_pseudoword_2",
+            "code.block_visual_pseudoword_3",
+            "code.block_visual_control_1",
+            "code.block_visual_control_2",
+            "code.block_visual_control_3",
+            "code.block_audio_word_1",
+            "code.block_audio_word_2",
+            "code.block_audio_word_3",
+            "code.block_audio_pseudoword_1",
+            "code.block_audio_pseudoword_2",
+            "code.block_audio_pseudoword_3",
+            "code.block_audio_control_1",
+            "code.block_audio_control_2",
+            "code.block_audio_control_3"
+          ]
+      }
+  }
+
+  ]
+  }

@@ -1,0 +1,75 @@
+{
+  "Name": "MVPA_6_betas",
+  "BIDSModelVersion": "1.0.0",
+  "Description": "model for MVPA of words, pseudowords and control aggregated within each RUN (1 beta/run)",
+  "Input": {
+    "task": [
+      "MultimodalReadSpeech"
+    ],
+    "space": [
+      "IXI549Space"
+    ]
+  },
+  "Nodes": [
+    {
+      "Level": "Run",
+      "Name": "mvpa_6betas",
+      "GroupBy": [
+        "run",
+        "subject "
+      ],
+      "Model": {
+          "X": [
+              "trial_type.block_tactile_word",
+              "trial_type.block_tactile_pseudoword",
+              "trial_type.block_tactile_control",
+              "trial_type.block_audio_word",
+              "trial_type.block_audio_pseudoword",
+              "trial_type.block_audio_control",
+              "trial_type.cue",
+              "trial_type.target",
+              "trial_type.response",
+              "trans_?",
+              "rot_?",
+              "*outlier*"
+          ],
+          "HRF": {
+              "Variables": [
+                "trial_type.block_tactile_word",
+                "trial_type.block_tactile_pseudoword",
+                "trial_type.block_tactile_control",
+                "trial_type.block_audio_word",
+                "trial_type.block_audio_pseudoword",
+                "trial_type.block_audio_control",
+                "trial_type.cue",
+                "trial_type.target",
+                "trial_type.response"
+              ],
+              "Model": "spm"
+          },
+          "Type": "glm",
+          "Options": {
+              "HighPassFilterCutoffHz": 0.0078,
+              "Mask": ""
+          },
+          "Software": {
+              "SPM": {
+                  "SerialCorrelation": "FAST"
+              }
+          }
+      },
+      "DummyContrasts": {
+          "Test": "t",
+          "Contrasts": [
+            "trial_type.block_tactile_word",
+            "trial_type.block_tactile_pseudoword",
+            "trial_type.block_tactile_control",
+            "trial_type.block_audio_word",
+            "trial_type.block_audio_pseudoword",
+            "trial_type.block_audio_control"
+          ]
+      }
+  }
+
+  ]
+  }
