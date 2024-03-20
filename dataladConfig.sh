@@ -4,11 +4,11 @@
 
 # raw dataset url (either GIN or openneuro)
 # for DEMO use: git@gin.g-node.org:/cpp-lln-lab/CPP_visMotion-raw.git
-URL_RAW=''
+URL_RAW='git@gin.g-node.org:/JacMatu/2021_Nencki_MultimodalLanguage_JM_raw.git'
 
 # derivatives sibling url
 # for DEMO use: git@gin.g-node.org:/cpp_brewery/CPP_visMotion-derivatives.git
-URL_DER=''
+URL_DER='git@gin.g-node.org:/JacMatu/analyses_MultimodalLanguageMVPA-derivatives.git'
 
 # derivatives/preproc sibling url
 # for DEMO use: git@gin.g-node.org:/cpp_brewery/CPP_visMotion-bidspm-preproc.git
