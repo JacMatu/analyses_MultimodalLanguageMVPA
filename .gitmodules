@@ -6,3 +6,8 @@
 	url = git@gin.g-node.org:/JacMatu/2021_Nencki_MultimodalLanguage_JM_raw.git
 	datalad-id = 2bea0f6d-8783-4eed-b2d3-58ad97532243
 	datalad-url = git@gin.g-node.org:/JacMatu/2021_Nencki_MultimodalLanguage_JM_raw.git
+[submodule "outputs/derivatives"]
+	path = outputs/derivatives
+	url = git@gin.g-node.org:/JacMatu/analyses_MultimodalLanguageMVPA-derivatives.git
+	datalad-id = f4b9b887-f545-4eaa-ae6f-4121b65d9b12
+	datalad-url = git@gin.g-node.org:/JacMatu/analyses_MultimodalLanguageMVPA-derivatives.git
