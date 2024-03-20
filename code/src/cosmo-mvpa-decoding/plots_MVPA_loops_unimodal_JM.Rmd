@@ -1,0 +1,251 @@
+---
+title: "MVPA_PTBUN_2023"
+author: "Jacek Matuszewski"
+date: '2023-09-15'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load packages
+```{r}
+library(tidyverse)
+library(data.table)
+library(cowplot)
+library(RColorBrewer)
+library(patchwork)
+```
+
+
+Set variables
+```{r}
+
+
+ffx <- 'beta' # beta tmap
+featRatio <- '0.8'
+#space <-'IXI549Space'
+FWHM <- 2
+groups <- c('blind', 'sighted') # blind or sighted
+# set te path to the task folder
+cosmo_results <- '/Volumes/Slim_Reaper/Projects/Language_MVPA/outputs/derivatives/cosmo-mvpa'
+#task_audVis <-  paste('task-audVisMotSpatialFreq_space-MNI152NLin2009cAsym_FWHM-', as.character(FWHM), '_node-mvpaBlockAverage', sep ='')
+task_ReadSpeech <- paste0('task-MultimodalReadSpeech_space-IXI549Space_FWHM-',as.character(FWHM),'_node-mvpa6betas')
+
+decoding_label <- 'visfatlas' #'cVWFA' 'LexPerVWFA'
+cosmo_results_path_ReadSpeech <- paste(cosmo_results, task_ReadSpeech,  decoding_label,
+                                       'unimodal','accuracy', sep ='/')
+
+#namePattern <- paste('sub-',group,'.*_label-VWFAwithinmodal_.*\\.csv$', sep = '')
+```
+
+
+Load results and create group DFs
+```{r}
+for(g in seq_along(groups)) {
+    
+    #Set name pattern and get the files
+    #namePattern <- paste('sub-',groups[g],'.*_label-VWFAwithinmodal_.*\\.csv$', sep = '')
+    #namePattern <- paste('sub-',groups[g],'.*_label-VWFAcrossmodal_.*\\.csv$', sep = '')
+    namePattern <- paste('sub-',groups[g],'.*_label-',decoding_label,'_.*\\.csv$', sep = '')
+    
+    allfiles_ReadSpeech <- list.files(cosmo_results_path_ReadSpeech, pattern = namePattern)
+    
+    group_df_temp <- lapply(paste(cosmo_results_path_ReadSpeech, 
+                                  allfiles_ReadSpeech, sep ='/'), 
+                            read.csv, sep =',') %>% 
+        rbindlist %>% 
+        dplyr::select(!contains('permutation')) %>% 
+        mutate(accuracy = accuracy * 100) %>% #make %
+        mutate(group = groups[g])#drop the null distribution columns %>%
+    
+        
+    #Rename the group DF
+    assign(paste0('mvpa_',groups[g]), group_df_temp)
+    rm(group_df_temp)
+}
+
+#join the dfs
+mvpa_joined <- rbind(mvpa_blind, mvpa_sighted)
+rm(mvpa_blind, mvpa_sighted)
+
+```
+
+
+Specify plotting variables based on the MVPA content (ROIs, decoding conditions)
+assumes identical variables between groups! 
+```{r}
+#Name of ROIs 
+roi <- unique(mvpa_joined$roiArea)
+
+#Name of decoding conditions 
+classifier <- unique(mvpa_joined$conditions)
+modalities <- unique(mvpa_joined$modality)
+```
+
+Summarize accuracies for descriptive purposes
+```{r}
+mvpa_accuracy <-  mvpa_joined %>%
+        group_by(group, 
+                 roiArea,
+                 ffxResults,
+                 modality,
+                 conditions) %>%
+        summarize(mean_accuracy = mean(accuracy),
+                                sd_accurarcy = sd(accuracy),
+                                se_accuracy = sd(accuracy)/sqrt(20),
+                                .groups = 'keep')   
+```
+
+
+Plotting loop across everything? Start easy
+```{r}
+
+dark_colors <- brewer.pal(n=3, name = "Dark2") 
+light_colors <- brewer.pal(n=3, name = "Pastel2") 
+std.error <- function(x) sd(x)/sqrt(length(x))
+
+for(g in seq_along(groups)) {
+    for(m in seq_along(modalities)) {
+       for(c in seq_along(classifier)) {
+            for (r in seq_along(roi)) {
+
+           plot <- 
+                mvpa_joined %>% 
+                # Pick a condition and modality for this plot
+                filter(group == groups[g] & 
+                           conditions == classifier[c] & 
+                           modality == modalities[m] & 
+                           ffxResults == ffx &
+                           roiArea == roi[r]) %>% 
+                ggplot(aes(x = roiArea, y = accuracy, color = roiArea)) +
+                geom_point(aes(alpha = I(0.7)), 
+                   position = position_jitterdodge(jitter.width=0.2,
+                                                   dodge.width = 0.3),
+                   size = 4.5) +
+                stat_summary(aes(x = roiArea, y = accuracy, color = roiArea),
+                     fun = "mean", 
+                     geom = "crossbar", 
+                     position = position_dodge(width = 0.5),
+                     width = .55,
+                     colour  = 'black',
+                     inherit.aes = FALSE,
+                    show.legend = FALSE) + 
+                stat_summary(aes(x = roiArea, y = accuracy, color = roiArea),
+                         fun.max = function(x) mean(x) + (std.error(x)), # sems too small for sighted
+                         fun.min = function(x) mean(x) - (std.error(x)), # sems too small for sighted
+                         #fun.max = function(x) mean(x) + sd(x),
+                         #fun.min = function(x) mean(x) - sd(x),
+                         geom = "errorbar",
+                         position = position_dodge(width = 0.5),
+                         width = .15,
+                         size = 0.8,
+                         colour  = 'black',
+                         inherit.aes = FALSE,
+                         show.legend = FALSE) + 
+                geom_hline(yintercept=c(50), 
+                       linetype="dotted", 
+                       colour="black", 
+                       linewidth=.5) +
+                scale_color_manual(values = if(groups[g] == 'blind'){
+                    c(dark_colors[1], light_colors[1])
+                } else if(groups[g] == 'sighted') {
+                    c(dark_colors[2], light_colors[2])
+                }) +
+                scale_y_continuous(name = "Clasisfier Accuracy [%]", 
+                                   limits = c(0,100)) +
+                scale_x_discrete(name = 'Region of interest', 
+                                 labels = roi[r]) +
+               # ggtitle(paste(groups[g], modalities[m], classifier[c], sep = ' ')) +
+                theme_cowplot(font_size = 16, font_family = "Arial") +
+                theme(axis.line = element_line(colour = 'black', size = 1),
+                      axis.ticks = element_line(colour = 'black', size = 1),
+                      axis.text = element_text(face="bold"),
+                      legend.position = 'none')
+                
+                           
+         
+                                
+
+
+            #Rename the plot based on what it represents 
+            assign(paste('plot_unimodal',groups[g], classifier[c], roi[r], modalities[m],  
+                         sep = '_'), plot)
+            rm(plot)
+            
+            }
+       }
+   }
+}
+
+```
+
+
+Pathwork plot pasting 
+QUICK AND DIRTY, OPTIMIZE IT IN THE LOOP WHEN YOU HAVE FREE CODING TIME! 
+
+V1
+```{r}
+
+plot_unimodal_blind_WordPseudoword_v1combined_reading + plot_unimodal_blind_WordControl_v1combined_reading + plot_unimodal_blind_PseudowordControl_v1combined_reading
+
+plot_unimodal_sighted_WordPseudoword_v1combined_reading + plot_unimodal_sighted_WordControl_v1combined_reading + plot_unimodal_sighted_PseudowordControl_v1combined_reading
+
+
+plot_unimodal_blind_WordPseudoword_v1combined_speech + plot_unimodal_blind_WordControl_v1combined_speech + plot_unimodal_blind_PseudowordControl_v1combined_speech
+
+plot_unimodal_sighted_WordPseudoword_v1combined_speech + plot_unimodal_sighted_WordControl_v1combined_speech + plot_unimodal_sighted_PseudowordControl_v1combined_speech
+
+
+```
+
+iOS
+```{r}
+
+plot_unimodal_blind_WordPseudoword_IOS_reading + plot_unimodal_blind_WordControl_IOS_reading + plot_unimodal_blind_PseudowordControl_IOS_reading
+
+plot_unimodal_sighted_WordPseudoword_IOS_reading + plot_unimodal_sighted_WordControl_IOS_reading + plot_unimodal_sighted_PseudowordControl_IOS_reading
+
+
+plot_unimodal_blind_WordPseudoword_IOS_speech + plot_unimodal_blind_WordControl_IOS_speech + plot_unimodal_blind_PseudowordControl_IOS_speech
+
+plot_unimodal_sighted_WordPseudoword_IOS_speech + plot_unimodal_sighted_WordControl_IOS_speech + plot_unimodal_sighted_PseudowordControl_IOS_speech
+
+
+```
+
+
+pOTS
+```{r}
+
+plot_unimodal_blind_WordPseudoword_pOTS_reading + plot_unimodal_blind_WordControl_pOTS_reading + plot_unimodal_blind_PseudowordControl_pOTS_reading
+
+plot_unimodal_sighted_WordPseudoword_pOTS_reading + plot_unimodal_sighted_WordControl_pOTS_reading + plot_unimodal_sighted_PseudowordControl_pOTS_reading
+
+
+plot_unimodal_blind_WordPseudoword_pOTS_speech + plot_unimodal_blind_WordControl_pOTS_speech + plot_unimodal_blind_PseudowordControl_pOTS_speech
+
+plot_unimodal_sighted_WordPseudoword_pOTS_speech + plot_unimodal_sighted_WordControl_pOTS_speech + plot_unimodal_sighted_PseudowordControl_pOTS_speech
+
+
+```
+
+
+
+```{r}
+
+## READING
+#BLIND
+plot_unimodal_blind_WordPseudoword_reading + plot_unimodal_blind_WordControl_reading + plot_unimodal_blind_PseudowordControl_reading
+#SIGHTED
+plot_unimodal_sighted_WordPseudoword_reading + plot_unimodal_sighted_WordControl_reading + plot_unimodal_sighted_PseudowordControl_reading
+
+## SPEECH
+#BLIND
+plot_unimodal_blind_WordPseudoword_speech + plot_unimodal_blind_WordControl_speech + plot_unimodal_blind_PseudowordControl_speech
+#SIGHTED
+plot_unimodal_sighted_WordPseudoword_speech + plot_unimodal_sighted_WordControl_speech + plot_unimodal_sighted_PseudowordControl_speech
+
+```
+

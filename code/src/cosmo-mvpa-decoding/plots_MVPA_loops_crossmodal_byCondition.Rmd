@@ -1,0 +1,233 @@
+---
+title: "MVPA_PTBUN_2023"
+author: "Jacek Matuszewski"
+date: '2023-09-15'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load packages
+```{r}
+library(tidyverse)
+library(data.table)
+library(cowplot)
+library(RColorBrewer)
+library(patchwork)
+```
+
+
+Set variables
+```{r}
+
+
+ffx <- 'beta' # beta tmap
+featRatio <- '0.8'
+#space <-'IXI549Space'
+FWHM <- 2
+groups <- c('blind', 'sighted') # blind or sighted
+# set te path to the task folder
+cosmo_results <- '/Volumes/Slim_Reaper/Projects/Language_MVPA/outputs/derivatives/cosmo-mvpa'
+#task_audVis <-  paste('task-audVisMotSpatialFreq_space-MNI152NLin2009cAsym_FWHM-', as.character(FWHM), '_node-mvpaBlockAverage', sep ='')
+decoding_mod <- 'crossmodal'
+task_ReadSpeech <- paste0('task-MultimodalReadSpeech_space-IXI549Space_FWHM-',as.character(FWHM),'_node-mvpa6betas')
+
+decoding_label <- 'JuBrain' #'cVWFA' 'LexPerVWFA'
+#decoding_label <- 'cVWFA'#'visfatlas' #'cVWFA' 'LexPerVWFA' 'JuBrain'
+cosmo_results_path_ReadSpeech <- paste(cosmo_results, task_ReadSpeech,  decoding_label,
+                                       decoding_mod,'accuracy', sep ='/')
+
+#namePattern <- paste('sub-',group,'.*_label-VWFAwithinmodal_.*\\.csv$', sep = '')
+```
+
+
+Load results and create group DFs
+```{r}
+for(g in seq_along(groups)) {
+    
+    #Set name pattern and get the files
+    #namePattern <- paste('sub-',groups[g],'.*_label-VWFAwithinmodal_.*\\.csv$', sep = '')
+    #namePattern <- paste('sub-',groups[g],'.*_label-VWFAcrossmodal_.*\\.csv$', sep = '')
+    namePattern <- paste('sub-',groups[g],'.*_label-',decoding_label,'_.*\\.csv$', sep = '')
+    
+    allfiles_ReadSpeech <- list.files(cosmo_results_path_ReadSpeech, pattern = namePattern)
+    
+    group_df_temp <- lapply(paste(cosmo_results_path_ReadSpeech, 
+                                  allfiles_ReadSpeech, sep ='/'), 
+                            read.csv, sep =',') %>% 
+        rbindlist %>% 
+        dplyr::select(!contains('permutation')) %>% 
+        mutate(accuracy = accuracy * 100) %>% #make %
+        mutate(group = groups[g])#drop the null distribution columns %>%
+    
+        
+    #Rename the group DF
+    assign(paste0('mvpa_',groups[g]), group_df_temp)
+    rm(group_df_temp)
+}
+
+#join the dfs
+mvpa_joined <- rbind(mvpa_blind, mvpa_sighted) %>% 
+    mutate(conditions = factor(conditions, levels = c('WordPseudoword', 'WordControl',
+                                                      'PseudowordControl')))
+
+# COMPUTE SUBJECT-WISE AVERAGE DECODING ACCURACY FOR EACH ROI AND CONDITION 
+mvpa_joined_avg <- mvpa_joined %>% 
+    group_by(sub, roiArea, conditions) %>% 
+    mutate(accuracy_avg = mean(accuracy)) %>% 
+    filter(row_number() == 1) %>%
+    ungroup() %>% 
+    dplyr::select(-c(accuracy, TrainTest)) %>% 
+    mutate(TrainTest = 'Average') %>%
+    rename(accuracy = accuracy_avg) %>% 
+    dplyr::select(colnames(mvpa_joined))
+
+#Paste DFs together for plot purposes
+mvpa_joined_avg <- rbind(mvpa_joined_avg, mvpa_joined)  %>% 
+    #Factorize for order on the plot
+    mutate(TrainTest = factor(TrainTest, levels = c('trainRead_testSpeech', 'Average', 'trainSpeech_testRead'),
+                              labels = c('Train on reading, test on speech', 'Average', 'Train on speech, test on reading')))
+    
+
+    
+rm(mvpa_blind, mvpa_sighted)
+
+```
+
+
+Specify plotting variables based on the MVPA content (ROIs, decoding conditions)
+assumes identical variables between groups! 
+```{r}
+#Name of ROIs 
+roi <- unique(mvpa_joined$roiArea)
+
+#Name of decoding conditions 
+classifier <- unique(mvpa_joined$conditions)
+modalities <- unique(mvpa_joined$TrainTest)
+```
+
+Summarize accuracies for descriptive purposes
+```{r}
+mvpa_accuracy <-  mvpa_joined %>%
+     mutate(conditions = factor(conditions, levels = classifier)) %>% 
+        group_by(group, 
+                 roiArea,
+                 ffxResults,
+                 TrainTest,
+                 conditions) %>%
+        summarize(mean_accuracy = mean(accuracy),
+                                sd_accurarcy = sd(accuracy),
+                                se_accuracy = sd(accuracy)/sqrt(20),
+                                .groups = 'keep')  
+
+mvpa_accuracy_avg <-mvpa_joined %>%
+     mutate(conditions = factor(conditions, levels = classifier)) %>% 
+        group_by(group, 
+                 roiArea,
+                 ffxResults,
+                 conditions) %>%
+        summarize(mean_accuracy = mean(accuracy),
+                                sd_accurarcy = sd(accuracy),
+                                se_accuracy = sd(accuracy)/sqrt(20),
+                                .groups = 'keep')  %>% 
+    mutate(TrainTest = 'Average') %>% 
+    dplyr::select(group, roiArea, ffxResults, TrainTest, everything())
+
+mvpa_accuracy_joined <- rbind(mvpa_accuracy, mvpa_accuracy_avg) %>% 
+    #Factorize for order on the plot
+    mutate(TrainTest = factor(TrainTest, levels = c('trainRead_testSpeech', 'Average', 'trainSpeech_testRead'),
+                              labels = c('Train on reading, test on speech', 'Average', 'Train on speech, test on reading')))
+```
+
+
+
+PLOTTING IN A LOOP WITH FUNCTION (YOLO)
+```{r}
+## TO CONSIDER: 
+# 1. make mean + SDs THE DARKEST version of the colour and check if they are visible and better than black!
+
+
+source('/Volumes/Slim_Reaper/Projects/Language_MVPA/code/src/cosmo-mpva/mvpa_plot_functions.R')
+
+blind_triple_colors <- c(brewer.pal(3, "Pastel2")[1], 
+                         brewer.pal(3, "Dark2")[1],
+                         brewer.pal(3, "Set2")[1])
+#     
+sighted_triple_colors <- c(brewer.pal(3, "Pastel2")[2], 
+                           brewer.pal(3, "Dark2")[2],
+                           brewer.pal(3, "Set2")[2])
+
+
+for(r in seq_along(roi)){
+    for(g in seq_along(groups)){
+        
+        #Slice the df to get given roi and group
+        plot_df <- mvpa_joined_avg %>% 
+            filter(roiArea == roi[r],
+                   group == groups[g]) 
+        
+        #Slice the average summary df 
+        avg_df <- mvpa_accuracy_avg %>% 
+            filter(roiArea == roi[r],
+                   group == groups[g]) 
+        
+        #make the basic plot with function
+        plot_temp <- crossmodal_mvpa_plot_ReadSpeech(plot_df, avg_df) 
+        
+        #recolour the plot based on group
+        if (groups[g] == 'blind') {
+            
+            plot_temp <- plot_temp + 
+                scale_color_manual(values = blind_triple_colors,
+                                   name = "Decoding partitions")
+                
+        } else if (groups[g] == 'sighted') {
+            
+            plot_temp <- plot_temp + 
+                scale_color_manual(values = sighted_triple_colors,
+                                   name = "Decoding partitions") 
+        }
+
+        # assign new name to the sub plot 
+        assign(paste0('plot_temp_', groups[g]), plot_temp)
+            rm(plot_temp)
+        
+    }
+    #PASTE THIS ROI AFTER BOTH GORUPS ARE DONE WITH PATCHWORK!
+    plot_joined_temp <- plot_temp_blind + plot_temp_sighted
+    
+    assign(paste('plot_crossmodal', roi[r], sep = '_'), plot_joined_temp)
+    
+    rm(plot_temp_blind, plot_temp_sighted, plot_joined_temp)
+    
+}
+
+```
+
+SAVE THE PLOTS
+```{r}
+fig_dir <- paste(cosmo_results,task_ReadSpeech, decoding_label,'crossmodal','plots/', sep = '/')
+
+#Create an output dir - if it already exists R only prints a warning!
+dir.create(fig_dir)
+#Overrride the ggsave function to use white bg
+ggsave <- function(..., bg = 'white') ggplot2::ggsave(..., bg = bg)
+
+#List TMS grid plots
+ggplot_list_xmodal <- Filter(function(x) is(x, "ggplot"), mget(ls(pattern = "^plot_crossmodal.*")))
+plot_list_xmodal <- ls(pattern = "^plot_crossmodal_.*")
+
+#Loop across main grids
+for(i in seq_along(ggplot_list_xmodal)) {
+
+        ggsave(filename = paste0(fig_dir, plot_list_xmodal[i], ".tiff"),
+               plot = ggplot_list_xmodal[[i]],
+               units = "px",
+               height = 320,
+               width = 740,
+               dpi = 300,
+               scale = 6.5)
+}
+```

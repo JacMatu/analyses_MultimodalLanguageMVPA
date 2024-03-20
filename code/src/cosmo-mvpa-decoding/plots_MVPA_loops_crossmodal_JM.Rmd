@@ -1,0 +1,202 @@
+---
+title: "MVPA_PTBUN_2023"
+author: "Jacek Matuszewski"
+date: '2023-09-15'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load packages
+```{r}
+library(tidyverse)
+library(data.table)
+library(cowplot)
+library(RColorBrewer)
+library(patchwork)
+```
+
+
+Set variables
+```{r}
+
+
+ffx <- 'beta' # beta tmap
+featRatio <- '0.8'
+space <-'IXI549Space'
+FWHM <- 2
+groups <- c('blind', 'sighted') # blind or sighted
+# set te path to the task folder
+cosmo_results <- '/Volumes/Slim_Reaper/Projects/Language_MVPA/outputs/derivatives/cosmo-mvpa'
+#task_audVis <-  paste('task-audVisMotSpatialFreq_space-MNI152NLin2009cAsym_FWHM-', as.character(FWHM), '_node-mvpaBlockAverage', sep ='')
+task_ReadSpeech <- paste0('task-MultimodalReadSpeech_space-IXI549Space_FWHM-',as.character(FWHM),'_node-mvpa6betas')
+cosmo_results_path_ReadSpeech <- paste(cosmo_results, task_ReadSpeech, 'crossmodal','accuracy', sep ='/')
+
+#namePattern <- paste('sub-',group,'.*_label-VWFAwithinmodal_.*\\.csv$', sep = '')
+```
+
+
+Load results and create group DFs
+```{r}
+for(g in seq_along(groups)) {
+    
+    #Set name pattern and get the files
+    #namePattern <- paste('sub-',groups[g],'.*_label-VWFAcrossmodal_.*\\.csv$', sep = '')
+    namePattern <- paste('sub-',groups[g],'.*_label-cVWFA_.*\\.csv$', sep = '')
+    #namePattern <- paste('sub-',groups[g],'.*_label-VWFAcrossmodal_.*\\.csv$', sep = '')
+    
+    allfiles_ReadSpeech <- list.files(cosmo_results_path_ReadSpeech, pattern = namePattern)
+    
+    group_df_temp <- lapply(paste(cosmo_results_path_ReadSpeech, 
+                                  allfiles_ReadSpeech, sep ='/'), 
+                            read.csv, sep =',') %>% 
+        rbindlist %>% 
+        dplyr::select(!contains('permutation')) %>% 
+        mutate(accuracy = accuracy * 100) %>% #make %
+        mutate(group = groups[g])#drop the null distribution columns %>%
+    
+        
+    #Rename the group DF
+    assign(paste0('mvpa_',groups[g]), group_df_temp)
+    rm(group_df_temp)
+}
+
+#join the dfs
+mvpa_joined <- rbind(mvpa_blind, mvpa_sighted)
+rm(mvpa_blind, mvpa_sighted)
+
+```
+
+
+Specify plotting variables based on the MVPA content (ROIs, decoding conditions)
+assumes identical variables between groups! 
+```{r}
+#Name of ROIs 
+roi <- unique(mvpa_joined$roiArea)
+
+#Name of decoding conditions 
+classifier <- unique(mvpa_joined$conditions)
+```
+
+Summarize accuracies for descriptive purposes
+```{r}
+mvpa_accuracy <-  mvpa_joined %>%
+        group_by(group, 
+                 roiArea,
+                 ffxResults,
+                 conditions) %>%
+        summarize(mean_accuracy = mean(accuracy),
+                                sd_accurarcy = sd(accuracy),
+                                se_accuracy = sd(accuracy)/sqrt(20),
+                                .groups = 'keep')   
+```
+
+
+Plotting loop across everything? Start easy
+```{r}
+
+dark_colors <- brewer.pal(n=3, name = "Dark2") 
+light_colors <- brewer.pal(n=3, name = "Pastel2") 
+std.error <- function(x) sd(x)/sqrt(length(x))
+
+for(g in seq_along(groups)) {
+       for(c in seq_along(classifier)) {
+            
+            ## TESTING PHASE
+            #g = 1; m = 1; c = 2
+            
+            
+            ## test
+        
+           plot <- 
+                mvpa_joined %>% 
+                # Pick a condition and modality for this plot
+                filter(group == groups[g] & 
+                           conditions == classifier[c] & 
+                           ffxResults == ffx) %>% 
+                ggplot(aes(x = roiArea, y = accuracy, color = roiArea)) +
+                geom_point(aes(alpha = I(0.7)), 
+                   position = position_jitterdodge(jitter.width=0.2,
+                                                   dodge.width = 0.3),
+                   size = 4.5) +
+                stat_summary(aes(x = roiArea, y = accuracy, color = roiArea),
+                     fun = "mean", 
+                         geom = "crossbar", 
+                         position = position_dodge(width = 0.5),
+                         width = .55,
+                      color = 'black',
+                     inherit.aes = FALSE,
+                    show.legend = FALSE) + 
+                stat_summary(aes(x = roiArea, y = accuracy, color = roiArea),
+                         fun.max = function(x) mean(x) + (std.error(x)), # sems too small for sighted
+                         fun.min = function(x) mean(x) - (std.error(x)), # sems too small for sighted
+                         #fun.max = function(x) mean(x) + sd(x),
+                         #fun.min = function(x) mean(x) - sd(x),
+                         geom = "errorbar",
+                         position = position_dodge(width = 0.5),
+                         width = .15,
+                         size = 0.8,
+                         color = 'black',
+                         inherit.aes = FALSE,
+                         show.legend = FALSE) + 
+                geom_hline(yintercept=c(50),  #binary decoding! 
+                       linetype="dotted", 
+                       colour="black", 
+                       linewidth=.5) +
+                scale_color_manual(values = if(groups[g] == 'blind'){
+                    c(dark_colors[1], light_colors[1])
+                } else if(groups[g] == 'sighted') {
+                    c(dark_colors[2], light_colors[2])
+                }) +
+                scale_y_continuous(name = "Clasisfier Accuracy [%]", 
+                                   limits = c(0,100)) +
+                scale_x_discrete(name = 'Region of interest', 
+                                 labels = roi) +
+                ggtitle(paste(groups[g], classifier[c], sep = ' ')) +
+                theme_cowplot(font_size = 16, font_family = "Arial") +
+                theme(axis.line = element_line(colour = 'black', size = 1),
+                      axis.ticks = element_line(colour = 'black', size = 1),
+                      axis.text = element_text(face="bold"),
+                      legend.position = 'none')
+                
+                           
+         
+                                
+
+
+            #Rename the plot based on what it represents 
+            assign(paste('plot_crossmodal',groups[g], classifier[c],  sep = '_'), plot)
+            rm(plot)
+            
+       }
+   }
+
+
+```
+
+
+Pathwork plot pasting 
+Titles are too big, they just indicate what's on plots for order, remove them in ppt
+
+PAIRWISE, ALWAYS TRAIN ON SPEECH AND TEST ON READING 
+```{r}
+plot_crossmodal_blind_WordPseudoword + plot_crossmodal_blind_WordControl + plot_crossmodal_blind_PseudowordControl
+
+plot_crossmodal_sighted_WordPseudoword + plot_crossmodal_sighted_WordControl + plot_crossmodal_sighted_PseudowordControl
+```
+
+
+MULTICLASS WIHT 2 TRAINING SETS 
+```{r}
+
+## READING
+#BLIND
+plot_blind_trainRead_testSpeech + plot_blind_trainSpeech_testRead
+#SIGHTED
+plot_sighted_trainRead_testSpeech + plot_sighted_trainSpeech_testRead
+
+
+```
+

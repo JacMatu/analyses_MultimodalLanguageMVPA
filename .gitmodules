@@ -11,3 +11,7 @@
 	url = git@gin.g-node.org:/JacMatu/analyses_MultimodalLanguageMVPA-derivatives.git
 	datalad-id = f4b9b887-f545-4eaa-ae6f-4121b65d9b12
 	datalad-url = git@gin.g-node.org:/JacMatu/analyses_MultimodalLanguageMVPA-derivatives.git
+[submodule "code/src/cosmo-mvpa-decoding/archive/analisys_high-re_multiSensSpatFreq"]
+	path = code/src/cosmo-mvpa-decoding/archive/analisys_high-re_multiSensSpatFreq
+	url = git@github.com:marcobarilari/analisys_high-re_multiSensSpatFreq.git
+	datalad-id = 32a6f625-e2f0-4df9-a563-858a90ded00f

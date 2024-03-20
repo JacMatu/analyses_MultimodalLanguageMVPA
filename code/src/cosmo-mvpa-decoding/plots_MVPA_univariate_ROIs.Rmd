@@ -1,0 +1,216 @@
+---
+title: "MVPA_PTBUN_2023"
+author: "Jacek Matuszewski"
+date: '2023-09-15'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This script loads csv accuracy outputs from `runMVPA_unimodal_ReadSpeech.m` and 
+plots individual accuracies + group mean & SE per decoding condition in each ROI. 
+
+Expected structure: 
+outputs
+    derivatives
+        cosmo-mvpa
+            <decoding_label> [mostly atlas or ROI type, e.g. 'visfatlas']
+                accuracies [this is where your csv files should be ]
+                permutations [not important for this script]
+                confusion matrices [not important for this script]
+
+
+decoding condition = pairwise decoding between each par of classes
+Script should work even if you only have 1 (e.g. multiclass decoding)
+
+This script will also calculate "group summaries" for accuracy (mean se) and print 
+them on plots for convenience
+
+Looking for ROIs, conditions and sensory modalities is done through `unique` function, 
+so it's not hardcoded, it will just look for the unique values in your analyses
+
+Load packages
+```{r Load Packages}
+library(tidyverse)
+library(data.table)
+library(cowplot)
+library(RColorBrewer)
+library(patchwork)
+```
+
+
+Set variables
+```{r Setup variables}
+
+
+ffx <- 'beta' # beta tmap
+#featRatio <- '0.8' #just for saving outputs?
+#space <-'IXI549Space'
+FWHM <- 2
+groups <- c('blind', 'sighted') # blind or sighted
+# set te path to the task folder
+stats_dir <- '/Volumes/Slim_Reaper/Projects/Language_MVPA/outputs/derivatives/bidspm-stats'
+
+#decoding_label <- 'JuBrain'#'visfatlas' #'cVWFA' 'LexPerVWFA' 'JuBrain'
+decoding_label <- 'cVWFA'#'visfatlas' #'cVWFA' 'LexPerVWFA' 'JuBrain'
+
+roi_file_dir <- paste(stats_dir, 'derivatives','bidspm-groupStats', sep = '/')
+roi_file_name <- paste0(decoding_label, '_stats.csv')
+
+roi_fpath <- paste(roi_file_dir, roi_file_name, sep = '/')
+```
+
+
+Wrangle the ROI DF for plots
+
+```{r DF wrangling and cleaning}
+# EXPECTED STRUCTURE: LONG FORMAT WITH 1 COLUMN / ROI + 
+# Condition, Group, Modality, Subject
+
+# Get the raw csv file from MATLAB output and name the columns 
+df.ROI.raw <- read_csv(roi_fpath, col_names = FALSE) %>% 
+    rename(File = X1, 
+           Group = X2, 
+           ROI_file = X3, 
+           Condition = X4, 
+           ContrastEstimate = X5)
+
+#Here you need to:
+# 1. Extract the Subject ID from the file path - DONE
+# 2. Extract the meaningfull non-BIDS ROI label from the BIDS name - DONE
+# 3. Split the Condition into Condition and Modality on capital letter - DONE
+
+
+
+df.ROI.clean <- df.ROI.raw %>% 
+    #Get the subject name from file path
+    mutate(Subject = str_split(File, "/", simplify = TRUE)[,9]) %>% 
+    #Get the ROI label from ROI name
+    # EXTRACT EVERYTHING BETWEENN _label- and next _
+    mutate(ROI_label = str_match(ROI_file, "_label-\\s*(.*?)\\s*_")[,2]) %>% 
+    #Get proper Condition and Modality names 
+    group_by(Condition) %>% 
+    mutate(Modality = unlist(str_split(Condition, "(?=[[:upper:]])"))[2]) %>% 
+    mutate(Modality = recode(Modality, 'Read' = 'Reading')) %>% 
+    mutate(Condition = unlist(str_split(Condition, "(?=[[:upper:]])"))[3]) %>% 
+    ungroup() %>% 
+    # Capitalize Group names for plotting functions 
+    mutate(Group = sub("(.)", "\\U\\1", Group, perl=TRUE)) %>% 
+    # Change condition names
+     mutate(Condition = recode(Condition, 'Word' = 'Words', 
+                               'Pseudoword' = 'Pseudowords')) %>% 
+    # Drop the File and ROI_name from the df 
+    dplyr::select(Subject, Group, Modality, Condition, ROI_label, ContrastEstimate)
+    
+
+```
+
+
+Summarize BOLD levels for descriptive purposes
+```{r SUmmary Stats}
+df.ROI.summaries <-  df.ROI.clean %>%
+        group_by(Group, 
+                 ROI_label,
+                 Modality,
+                 Condition) %>%
+        dplyr::summarize(mean = mean(ContrastEstimate),
+                                sd = sd(ContrastEstimate),
+                                sem = sd(ContrastEstimate)/sqrt(n()),
+                                .groups = 'keep')   
+df.ROI.summaries
+```
+
+
+BAR PLOTS WITH 1 FUNCTION FOR BOTH GROUPS!
+```{r}
+source('/Volumes/Slim_Reaper/Projects/Language_MVPA/code/src/cosmo-mpva/mvpa_plot_functions.R')
+
+#For each roi in the DF 
+roi_list <- unique(df.ROI.clean$ROI_label)
+
+# make a bar plot with 2 groups and equal Y axes
+for(i in seq_along(roi_list)){
+    
+    assign(paste0('plot.bar.roi.', roi_list[i]), 
+           univariate_fMRI_ROI_bars_both_gr(df.ROI.clean, 
+                                            roi = roi_list[i]))
+}
+
+```
+
+
+POINT PLOTS WITH 1 FUNCTION FOR BOTH GROUPS! 
+```{r}
+source('/Volumes/Slim_Reaper/Projects/Language_MVPA/code/src/cosmo-mpva/mvpa_plot_functions.R')
+
+#For each roi in the DF 
+roi_list <- unique(df.ROI.clean$ROI_label)
+
+#TEST
+#plot.point.test <- univariate_fMRI_ROI_points_both_gr(df.ROI.clean, roi = roi_list[1])
+
+# make a bar plot with 2 groups and equal Y axes
+for(i in seq_along(roi_list)){
+    
+    assign(paste0('plot.point.roi.', roi_list[i]), 
+           univariate_fMRI_ROI_points_both_gr(df.ROI.clean, 
+                                            roi = roi_list[i]))
+}
+
+```
+
+
+
+SAVE THE BAR PLOTS
+```{r}
+fig_dir <- paste(roi_file_dir, 'R_roi_plots/', sep = '/')
+
+#Create an output dir - if it already exists R only prints a warning!
+dir.create(fig_dir)
+
+#Overrride the ggsave function to use white bg
+ggsave <- function(..., bg = 'white') ggplot2::ggsave(..., bg = bg)
+
+#List TMS grid plots
+ggplot_bar_list <- Filter(function(x) is(x, "ggplot"), mget(ls(pattern = "^plot.bar.roi.*")))
+bar_plot_list <- ls(pattern = "^plot.bar.*")
+
+#Loop across main grids
+for(i in seq_along(ggplot_bar_list)) {
+
+        ggsave(filename = paste0(fig_dir, bar_plot_list[i], ".tiff"),
+               plot = ggplot_bar_list[[i]],
+               units = "px",
+               height = 320,
+               width = 740,
+               dpi = 300,
+               scale = 3.5)
+}
+```
+
+SAVE THE POINT PLOTS (comment out if not necesary)
+```{r}
+fig_dir <- paste(roi_file_dir, 'R_roi_plots/', sep = '/')
+
+#Overrride the ggsave function to use white bg
+ggsave <- function(..., bg = 'white') ggplot2::ggsave(..., bg = bg)
+
+#List TMS grid plots
+ggplot_bar_list <- Filter(function(x) is(x, "ggplot"), mget(ls(pattern = "^plot.point.roi.*")))
+bar_plot_list <- ls(pattern = "^plot.point.roi.*")
+
+#Loop across main grids
+for(i in seq_along(ggplot_bar_list)) {
+
+        ggsave(filename = paste0(fig_dir, bar_plot_list[i], ".tiff"),
+               plot = ggplot_bar_list[[i]],
+               units = "px",
+               height = 320,
+               width = 740,
+               dpi = 300,
+               scale = 3.5)
+}
+```
+
