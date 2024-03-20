@@ -16,7 +16,6 @@ datalad install -d . -s "${URL_RAW}" "${raw_dir}"
 
 # install derivatives dataset with submodules (hopefully)
 
-
 datalad install -r -d . -s "${URL_DER}" "${derivatives_dir}"
 
 cd "${derivatives_dir}"
@@ -25,7 +24,7 @@ datalad push --to origin -r
 
 cd "${root_dir}"
 
-datalad save -m "add code and folders to set subdatasets"
+datalad save . -m "add code and folders to set subdatasets"
 
 datalad push --to origin
 
